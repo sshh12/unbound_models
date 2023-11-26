@@ -5,7 +5,7 @@ from torch.nn.functional import conv1d
 import torch
 import logging
 
-from multi_token.modalities.base_modality import Modality
+from unbound_models.modalities.base_modality import Modality
 
 
 class UnboundMetaModel:

@@ -1,3 +1,2 @@
-
 class BaseBinding:
     pass
