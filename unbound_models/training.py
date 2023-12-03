@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, Dict, Union, Any
 from dataclasses import field, dataclass
 import logging
 import subprocess
@@ -132,6 +132,15 @@ class UnboundTrainer(Trainer):
             os.path.join(output_dir, "non_lora_trainables.bin"),
         )
 
+        binding_state_dict = self.binding.to_state_dict()
+        torch.save(
+            binding_state_dict,
+            os.path.join(output_dir, "binding_non_lora_trainables.bin"),
+        )
+
+    def floating_point_ops(self, inputs: Dict[str, Union[torch.Tensor, Any]]):
+        return 0
+
 
 def _get_training_devices_dump() -> str:
     out = subprocess.check_output(
@@ -172,12 +181,6 @@ def train_for_binding(
     model.config.use_cache = False
     model.config.model_cls = model_cls.__name__
     model.config.binding_builder = model_args.binding_builder
-    binding.embed_tokens = model.embed_tokens
-
-    import IPython
-
-    IPython.embed()
-    asdasd
 
     if training_args.gradient_checkpointing:
         if hasattr(model, "enable_input_require_grads"):
@@ -217,11 +220,23 @@ def train_for_binding(
     #         for p in proj.parameters():
     #             p.requires_grad = True
 
+    # model.requires_grad_(False)
+
+    for name, param in model.named_parameters():
+        if "embed_tokens" in name:
+            param.requires_grad = False
+
     os.makedirs(training_args.output_dir, exist_ok=True)
     with open(
         os.path.join(training_args.output_dir, "model_named_parameters.txt"), "w"
     ) as f:
         for name, param in model.named_parameters():
+            f.write(f"{name} {param.shape} {param.requires_grad}\n")
+
+    with open(
+        os.path.join(training_args.output_dir, "binding_named_parameters.txt"), "w"
+    ) as f:
+        for name, param in model.binding.token_embedding_head.named_parameters():
             f.write(f"{name} {param.shape} {param.requires_grad}\n")
 
     with open(os.path.join(training_args.output_dir, "README.md"), "w") as f:
@@ -244,6 +259,7 @@ def train_for_binding(
         train_dataset=dataset,
         eval_dataset=None,
     )
+    trainer.binding = binding
 
     if list(pathlib.Path(training_args.output_dir).glob(f"{PREFIX_CHECKPOINT_DIR}-*")):
         trainer.train(resume_from_checkpoint=True)

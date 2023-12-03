@@ -40,7 +40,7 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
 
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        self.modalities = None
+        self.binding = None
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -82,6 +82,7 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
             past_key_values,
             inputs_embeds,
             labels,
+            should_compute_loss,
         ) = self.prepare_inputs_labels_for_binding(
             input_ids, attention_mask, past_key_values, labels, **kwargs
         )
@@ -104,29 +105,28 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
         logits = logits.float()
 
         loss = None
-        if labels is not None:
-            # Shift so that tokens < n predict n
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
-            loss_fct = CrossEntropyLoss()
-            shift_logits = shift_logits.view(-1, self.config.vocab_size)
-            shift_labels = shift_labels.view(-1)
-            # Enable model parallelism
-            shift_labels = shift_labels.to(shift_logits.device)
-            loss = loss_fct(shift_logits, shift_labels)
+        if should_compute_loss:
+            loss = self.binding.compute_loss(
+                hidden_states,
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                **kwargs
+            )
 
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
-        return CausalLMOutputWithPast(
+        resp = CausalLMOutputWithPast(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+        resp.bind_values = self.binding.token_embedding_head(hidden_states)
+
+        return resp
 
     def prepare_inputs_for_generation(
         self,
@@ -134,7 +134,7 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
         past_key_values=None,
         attention_mask=None,
         inputs_embeds=None,
-        modality_inputs=None,
+        binding_inputs=None,
         **kwargs
     ):
         if past_key_values:
@@ -149,7 +149,7 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
             "past_key_values": past_key_values,
             "use_cache": kwargs.get("use_cache"),
             "attention_mask": attention_mask,
-            **(modality_inputs or {}),
+            **(binding_inputs or {}),
         }
 
         return model_inputs
