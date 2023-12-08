@@ -58,12 +58,8 @@ def get_peft_state(named_params, bias) -> Dict:
     return to_return
 
 
-def get_peft_state_non_lora(named_params) -> Dict:
-    to_return = {
-        k: t
-        for k, t in named_params
-        if "lora_" not in k and (t.requires_grad or "_lmm_projector" in k)
-    }
+def get_trained_state_non_lora(named_params) -> Dict:
+    to_return = {k: t for k, t in named_params if "lora_" not in k and t.requires_grad}
     to_return = {
         k: maybe_zero_3(v, ignore_status=True).cpu() for k, v in to_return.items()
     }

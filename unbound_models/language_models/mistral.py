@@ -39,7 +39,6 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
         self.model = MistralUnboundModel(config)
 
         self.vocab_size = config.vocab_size
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.binding = None
 
         # Initialize weights and apply final processing
@@ -86,6 +85,9 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
         ) = self.prepare_inputs_labels_for_binding(
             input_ids, attention_mask, past_key_values, labels, **kwargs
         )
+        assert input_ids is None
+        assert labels is None
+        assert inputs_embeds is not None
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs = self.model(
@@ -101,8 +103,6 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
         )
 
         hidden_states = outputs[0]
-        logits = self.lm_head(hidden_states)
-        logits = logits.float()
 
         loss = None
         if should_compute_loss:
@@ -114,17 +114,20 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
             )
 
         if not return_dict:
-            output = (logits,) + outputs[1:]
+            output = (None,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
         resp = CausalLMOutputWithPast(
             loss=loss,
-            logits=logits,
+            logits=None,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+        resp.hidden_states = hidden_states
         resp.bind_values = self.binding.token_embedding_head(hidden_states)
+        resp.inputs_embeds = inputs_embeds
+        resp.attention_mask = attention_mask
 
         return resp
 

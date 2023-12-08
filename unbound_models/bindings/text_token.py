@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch
 
 from unbound_models.bindings.base_binding import BaseBinding
-from unbound_models.model_utils import fix_tokenizer, get_peft_state_non_lora
+from unbound_models.model_utils import fix_tokenizer, get_trained_state_non_lora
 
 TOKENIZER = "mistralai/Mistral-7B-Instruct-v0.1"
 SEP = "[/INST]"
@@ -20,7 +20,11 @@ class TextTokenBinding(BaseBinding):
         fix_tokenizer(self.tokenizer)
 
         self.token_embedding_head = nn.Sequential(
-            *[nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE)]
+            *[
+                nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE),
+                nn.GELU(),
+                nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE),
+            ]
         )
         self.device = "cuda"
         self.dtype = torch.float32
@@ -54,27 +58,12 @@ class TextTokenBinding(BaseBinding):
         }
 
     def collate_rows(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        assert len(instances) == 1
+
         tokens_to_embed, output_mask, input_output_mask = tuple(
-            [instance[key] for instance in instances]
+            instances[0][key][: self.tokenizer.model_max_length].unsqueeze(0)
             for key in ["tokens_to_embed", "output_mask", "input_output_mask"]
         )
-
-        tokens_to_embed = torch.nn.utils.rnn.pad_sequence(
-            tokens_to_embed,
-            batch_first=True,
-            padding_value=0,
-        )
-        tokens_to_embed = tokens_to_embed[:, : self.tokenizer.model_max_length]
-
-        output_mask = torch.nn.utils.rnn.pad_sequence(
-            output_mask, batch_first=True, padding_value=0
-        )
-        output_mask = output_mask[:, : self.tokenizer.model_max_length]
-
-        input_output_mask = torch.nn.utils.rnn.pad_sequence(
-            input_output_mask, batch_first=True, padding_value=0
-        )
-        input_output_mask = input_output_mask[:, : self.tokenizer.model_max_length]
 
         batch = dict(
             tokens_to_embed=tokens_to_embed,
@@ -117,10 +106,19 @@ class TextTokenBinding(BaseBinding):
         # Enable model parallelism
         shift_true_emb = shift_true_emb.to(shift_pred_emb.device)
 
-        loss_fct = nn.MSELoss()
-        loss = loss_fct(shift_pred_emb, shift_true_emb)
+        # loss_fct = nn.MSELoss()
+        # loss = loss_fct(shift_pred_emb, shift_true_emb)
+        loss_fct = torch.nn.CosineEmbeddingLoss()
+        loss = loss_fct(
+            shift_pred_emb,
+            shift_true_emb,
+            torch.ones(shift_true_emb.shape[0]).to(self.device),
+        )
 
         return loss
 
     def to_state_dict(self):
-        return get_peft_state_non_lora(self.token_embedding_head.named_parameters())
+        return get_trained_state_non_lora(self.token_embedding_head.named_parameters())
+
+    def load_state_dict(self, weights: Dict):
+        self.token_embedding_head.load_state_dict(weights, strict=False)

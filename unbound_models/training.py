@@ -18,7 +18,7 @@ from unbound_models.training_data import (
 from unbound_models.model_utils import (
     make_model_lora,
     get_peft_state,
-    get_peft_state_non_lora,
+    get_trained_state_non_lora,
     fix_tokenizer,
 )
 from unbound_models.bindings.base_binding import BaseBinding
@@ -126,11 +126,12 @@ class UnboundTrainer(Trainer):
     def _save_extras(self, output_dir: Optional[str] = None):
         self.model.config.save_pretrained(output_dir)
 
-        non_lora_state_dict = get_peft_state_non_lora(self.model.named_parameters())
-        torch.save(
-            non_lora_state_dict,
-            os.path.join(output_dir, "non_lora_trainables.bin"),
-        )
+        non_lora_state_dict = get_trained_state_non_lora(self.model.named_parameters())
+        if len(non_lora_state_dict) > 0:
+            torch.save(
+                non_lora_state_dict,
+                os.path.join(output_dir, "non_lora_trainables.bin"),
+            )
 
         binding_state_dict = self.binding.to_state_dict()
         torch.save(
@@ -273,8 +274,15 @@ def train_for_binding(
     state_dict = get_peft_state(model.named_parameters(), training_args.lora_bias)
     model.save_pretrained(training_args.output_dir, state_dict=state_dict)
 
-    non_lora_state_dict = get_peft_state_non_lora(model.named_parameters())
+    non_lora_state_dict = get_trained_state_non_lora(model.named_parameters())
+    if len(non_lora_state_dict) > 0:
+        torch.save(
+            non_lora_state_dict,
+            os.path.join(training_args.output_dir, "non_lora_trainables.bin"),
+        )
+
+    binding_state_dict = model.binding.to_state_dict()
     torch.save(
-        non_lora_state_dict,
-        os.path.join(training_args.output_dir, "non_lora_trainables.bin"),
+        binding_state_dict,
+        os.path.join(training_args.output_dir, "binding_non_lora_trainables.bin"),
     )

@@ -20,32 +20,88 @@ class ServeArguments(ModelArguments):
     temperature: float = field(default=0.01)
 
 
-# encoded = model.binding.encode_row({"messages": [{"role": "user", "content": "Hello"}]})
-
-# bank = model.model.embed_tokens(torch.arange(32000).to(model.device))
-
-# result_emb = model.forward(
+# encoded = model.binding.encode_row(
+#     {
+#         "messages": [
+#             {"role": "user", "content": "What is 1+1?"},
+#             {"role": "assistant", "content": "1"},
+#         ]
+#     }
+# )
+# model_result = model.forward(
 #     input_ids=None,
 #     attention_mask=encoded["input_output_mask"].ne(0).unsqueeze(0).to(model.device),
 #     **({"tokens_to_embed": encoded["tokens_to_embed"].unsqueeze(0).to(model.device)})
-# ).bind_values[0, -1]
+# )
+# model.binding.compute_loss(
+#     model_result.hidden_states, inputs_embeds=model_result.inputs_embeds
+# )
 
+# encoded = model.binding.encode_row({"messages": [{"role": "user", "content": "Hello"}]})
+# prompt_emb = model.model.embed_tokens(encoded["tokens_to_embed"].to(model.device))[-5]
+# bank = model.model.embed_tokens(torch.arange(32000).to(model.device))
 # import torch
 
-# tokenizer.decode(torch.linalg.norm(result_emb - bank, dim=1).argmin())
-
+# model.binding.compute_loss(
+#     model_result.hidden_states,
+#     inputs_embeds=inputs_embeds,
+#     attention_mask=attention_mask,
+#     **kwargs
+# )
 
 # with torch.inference_mode():
-#     output_ids = model.generate(
+#     model_result = model.forward(
 #         input_ids=None,
-#         max_new_tokens=128,
-#         use_cache=False,
-#         do_sample=False,
 #         attention_mask=encoded["input_output_mask"].ne(0).unsqueeze(0).to(model.device),
-#         binding_inputs={
-#             "tokens_to_embed": encoded["tokens_to_embed"].unsqueeze(0).to(model.device)
-#         },
+#         **(
+#             {
+#                 "tokens_to_embed": encoded["tokens_to_embed"]
+#                 .unsqueeze(0)
+#                 .to(model.device)
+#             }
+#         )
 #     )
+
+#     result_emb = model_result.bind_values[0, -1]
+#     sim_emb = torch.linalg.norm(result_emb - bank, dim=1)
+#     sim_known = torch.linalg.norm(prompt_emb - bank, dim=1)
+#     print("emb", tokenizer.decode(sim_emb.argmin()))
+#     print(sim_emb[sim_emb.argsort()])
+#     print(sim_known[sim_known.argsort()])
+
+
+# encoded = model.binding.encode_row(
+#     {"messages": [{"role": "user", "content": "What is 1+1?"}]}
+# )
+# bank = model.model.embed_tokens(torch.arange(32000).to(model.device))
+
+# with torch.inference_mode():
+#     model_result = model.forward(
+#         input_ids=None,
+#         attention_mask=encoded["input_output_mask"].ne(0).unsqueeze(0).to(model.device),
+#         **(
+#             {
+#                 "tokens_to_embed": encoded["tokens_to_embed"]
+#                 .unsqueeze(0)
+#                 .to(model.device)
+#             }
+#         )
+#     )
+
+#     result_emb = model_result.bind_values[0, -1]
+#     loss = torch.nn.MSELoss(reduction="none")(result_emb.tile((32000, 1)), bank).mean(
+#         axis=1
+#     )
+#     loss = torch.nn.CosineSimilarity(dim=1, eps=1e-6)(result_emb.tile((32000, 1)), bank)
+
+#     loss = torch.nn.PairwiseDistance(p=2.0, eps=1e-06)(
+#         result_emb.tile((32000, 1)), bank
+#     )
+# sim_emb = torch.linalg.norm(result_emb - bank, dim=1)
+# sim_known = torch.linalg.norm(prompt_emb - bank, dim=1)
+# print("emb", tokenizer.decode(sim_emb.argmin()))
+# print(sim_emb[sim_emb.argsort()])
+# print(sim_known[sim_known.argsort()])
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
