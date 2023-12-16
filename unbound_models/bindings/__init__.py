@@ -1,3 +1,3 @@
-from unbound_models.bindings.text_token import TextTokenBinding
+from unbound_models.bindings.next_token import NextTokenBinding
 
-BINDING_BUILDERS = {"text_token": lambda: TextTokenBinding()}
+BINDING_BUILDERS = {"next_token": lambda: NextTokenBinding()}

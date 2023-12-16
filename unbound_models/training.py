@@ -140,6 +140,7 @@ class UnboundTrainer(Trainer):
         )
 
     def floating_point_ops(self, inputs: Dict[str, Union[torch.Tensor, Any]]):
+        # HACK: This fails when we are only training the binding
         return 0
 
 
@@ -237,7 +238,7 @@ def train_for_binding(
     with open(
         os.path.join(training_args.output_dir, "binding_named_parameters.txt"), "w"
     ) as f:
-        for name, param in model.binding.token_embedding_head.named_parameters():
+        for name, param in model.binding.named_parameters():
             f.write(f"{name} {param.shape} {param.requires_grad}\n")
 
     with open(os.path.join(training_args.output_dir, "README.md"), "w") as f:

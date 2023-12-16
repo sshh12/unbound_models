@@ -1,8 +1,6 @@
 from typing import List, Optional, Tuple, Union
 
 import torch
-import torch.nn as nn
-from torch.nn import CrossEntropyLoss
 
 from transformers import (
     AutoConfig,
@@ -12,11 +10,10 @@ from transformers import (
     MistralForCausalLM,
 )
 
-from transformers.modeling_outputs import CausalLMOutputWithPast
-
 from unbound_models.language_models.base_model import (
     UnboundMetaModel,
     UnboundMetaForCausalLM,
+    UnboundOutput,
 )
 
 
@@ -60,7 +57,7 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs
-    ) -> Union[Tuple, CausalLMOutputWithPast]:
+    ) -> Union[Tuple, UnboundOutput]:
         output_attentions = (
             output_attentions
             if output_attentions is not None
@@ -117,17 +114,16 @@ class MistralUnboundForCausalLM(MistralForCausalLM, UnboundMetaForCausalLM):
             output = (None,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
-        resp = CausalLMOutputWithPast(
+        resp = UnboundOutput(
             loss=loss,
             logits=None,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
+            unbound_outputs=self.binding.compute_unbound_outputs(
+                hidden_states, **kwargs
+            ),
         )
-        resp.hidden_states = hidden_states
-        resp.bind_values = self.binding.token_embedding_head(hidden_states)
-        resp.inputs_embeds = inputs_embeds
-        resp.attention_mask = attention_mask
 
         return resp
 

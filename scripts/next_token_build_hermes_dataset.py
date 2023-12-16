@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, default="teknium/openhermes")
     parser.add_argument(
-        "-o", "--output_folder", type=str, default="/data/text-token-hermes-dataset"
+        "-o", "--output_folder", type=str, default="/data/next-token-hermes-dataset"
     )
     parser.add_argument("-n", "--num_proc", type=int, default=1)
     args = parser.parse_args()
